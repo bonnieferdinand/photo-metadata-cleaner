@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Photo Metadata Cleaner</title>
+<meta name="description" content="Free, private tool that removes EXIF, GPS, XMP, IPTC, AI prompts and C2PA Content Credentials from JPG, PNG and WebP images. Runs in your browser; images are never uploaded.">
+<meta property="og:title" content="Photo Metadata Cleaner">
+<meta property="og:description" content="Remove EXIF, GPS, AI-generator tags and C2PA credentials from images, privately in your browser.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#2747d6">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232747d6'/%3E%3Crect x='7' y='9' width='18' height='14' rx='2' fill='none' stroke='white' stroke-width='2.2'/%3E%3Cpath d='M9 21l5-5 3 3 2-2 4 4' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M22 5l5 5' stroke='%23ffd166' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working column like a lightbox table — drop tray on top, a stack of file cards below, each opening into its byte-level inventory. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --sunk: #f5f7f9;
+  --ink: #16202b;
+  --muted: #5b6876;
+  --line: #d5dbe2;
+  --accent: #2747d6;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3e8fc;
+  --ai: #b4235a;
+  --ai-soft: #fbe7ef;
+  --loc: #c2410c;
+  --loc-soft: #fdeee4;
+  --warn: #8a5a00;
+  --warn-soft: #fbf1d9;
+  --ok: #157a3c;
+  --ok-soft: #e2f4e8;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1419; --surface: #171e26; --sunk: #121920; --ink: #e6ebf0; --muted: #93a1af; --line: #2a3540;
+    --accent: #8095ff; --accent-ink: #0b1020; --accent-soft: #1e2850;
+    --ai: #f47aa5; --ai-soft: #3a1626; --loc: #fb923c; --loc-soft: #3a2010;
+    --warn: #f2c94c; --warn-soft: #33290d; --ok: #4ade80; --ok-soft: #10301c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1419; --surface: #171e26; --sunk: #121920; --ink: #e6ebf0; --muted: #93a1af; --line: #2a3540;
+  --accent: #8095ff; --accent-ink: #0b1020; --accent-soft: #1e2850;
+  --ai: #f47aa5; --ai-soft: #3a1626; --loc: #fb923c; --loc-soft: #3a2010;
+  --warn: #f2c94c; --warn-soft: #33290d; --ok: #4ade80; --ok-soft: #10301c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 24px; }
+header { display: grid; gap: 8px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5vw, 44px); line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 62ch; }
+.privacy { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ok); font-weight: 600; }
+.privacy::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+
+.tray {
+  border: 2px dashed var(--line); border-radius: 14px; background: var(--surface);
+  padding: 28px 20px; display: grid; gap: 14px; justify-items: center; text-align: center;
+  transition: border-color .15s, background .15s; cursor: pointer;
+}
+.tray:hover, .tray:focus-visible { border-color: var(--accent); outline: none; }
+.tray.over { border-color: var(--accent); background: var(--accent-soft); }
+.tray strong { font-family: var(--display); font-size: 20px; font-weight: 600; }
+.tray p { margin: 0; color: var(--muted); font-size: 14px; }
+.formats { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
+.opts { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.opt { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.opt input { width: 16px; height: 16px; accent-color: var(--accent); }
+.opt span small { color: var(--muted); font-size: 12px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+button, .btn {
+  font: 600 14px/1 var(--body); border-radius: 8px; padding: 10px 14px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+button:hover { border-color: var(--muted); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.primary:hover { filter: brightness(1.08); }
+button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+
+.summary { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; color: var(--muted); }
+.summary b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+.list { display: grid; gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.row { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px; }
+.thumb { width: 76px; height: 76px; border-radius: 8px; object-fit: cover; background: var(--sunk); border: 1px solid var(--line); }
+.info { min-width: 0; display: grid; gap: 6px; }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+.chip.ai { background: var(--ai-soft); color: var(--ai); border-color: transparent; }
+.chip.location { background: var(--loc-soft); color: var(--loc); border-color: transparent; }
+.chip.device, .chip.person { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.chip.sample { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.status { font-size: 13px; }
+.status.ok { color: var(--ok); }
+.status.err { color: var(--loc); }
+.side { display: grid; gap: 6px; justify-items: end; }
+.linkish { background: none; border: none; padding: 4px 0; color: var(--accent); font-weight: 600; font-size: 13px; }
+.linkish:hover { text-decoration: underline; }
+
+.detail { border-top: 1px solid var(--line); background: var(--sunk); padding: 16px 14px 18px; display: grid; gap: 18px; }
+.detail h3 { margin: 0 0 8px; font: 600 12px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; }
+td.k { white-space: nowrap; font-weight: 500; }
+td.num { font-family: var(--mono); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+td.v { min-width: 220px; }
+.val { margin: 0; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 8.5em; overflow: auto; }
+.tag { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.act-removed { color: var(--ai); font-weight: 600; }
+.act-kept { color: var(--ok); font-weight: 600; }
+
+.notes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.note { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.note h2 { font-family: var(--display); font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+.note p { margin: 0; color: var(--muted); font-size: 14px; }
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500;
+  max-width: calc(100vw - 32px);
+}
+@media (max-width: 560px) {
+  .row { grid-template-columns: 56px minmax(0, 1fr); }
+  .thumb { width: 56px; height: 56px; }
+  .side { grid-column: 1 / -1; justify-items: stretch; grid-template-columns: 1fr auto; align-items: center; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Photo Metadata Cleaner</h1>
+    <p class="lede">Strip EXIF, GPS, XMP, IPTC, AI prompts and C2PA Content Credentials from JPG, PNG and WebP images. The image pixels are copied byte for byte, so quality never changes.</p>
+    <span class="privacy">Runs in your browser. Images are never uploaded.</span>
+  </header>
+
+  <div class="tray" id="tray" tabindex="0" role="button" aria-label="Add images">
+    <strong>Drop images here</strong>
+    <p>or click to choose files. You can also paste an image.</p>
+    <span class="formats">JPG · JPEG · PNG · WEBP</span>
+    <input type="file" id="picker" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple hidden>
+  </div>
+
+  <div class="controls">
+    <div class="opts">
+      <label class="opt"><input type="checkbox" id="keepIcc" checked><span>Keep color profile <small>(ICC, keeps colors accurate)</small></span></label>
+      <label class="opt"><input type="checkbox" id="keepOrient" checked><span>Keep rotation <small>(orientation only)</small></span></label>
+    </div>
+    <div class="actions">
+      <button id="clearAll">Remove all</button>
+      <button class="primary" id="zipAll">Download all (.zip)</button>
+    </div>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <div class="list" id="list"></div>
+
+  <section class="notes">
+    <div class="note">
+      <h2>What gets removed</h2>
+      <p>Camera make, model and serial number, GPS location, dates, author and copyright fields, editing history, Stable Diffusion and ComfyUI prompts, Midjourney and DALL·E tags, IPTC "digital source type" AI labels, and signed C2PA manifests.</p>
+    </div>
+    <div class="note">
+      <h2>What stays</h2>
+      <p>The compressed image data, transparency, animation frames, and optionally the color profile and rotation flag. Nothing is re-encoded, so the cleaned file is the same picture with fewer bytes.</p>
+    </div>
+    <div class="note">
+      <h2>What metadata cleaning can't do</h2>
+      <p>Some generators also hide a watermark inside the pixels themselves (for example Google SynthID). That is part of the image, not its metadata, so no lossless cleaner removes it.</p>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- byte helpers ---------- */
+const utf8 = new TextDecoder("utf-8");
+const latin1 = new TextDecoder("latin1");
+const enc = new TextEncoder();
+const u16 = (b, o) => (b[o] << 8) | b[o + 1];
+const u32 = (b, o) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+const le32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+const be32b = v => [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255];
+const le32b = v => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+const be16b = v => [(v >> 8) & 255, v & 255];
+const ascii = (b, o, n) => latin1.decode(b.subarray(o, o + n));
+const startsWith = (b, s, o = 0) => { for (let i = 0; i < s.length; i++) if (b[o + i] !== s.charCodeAt(i)) return false; return true; };
+const cstr = (b, max = 40) => { let s = ""; for (let i = 0; i < Math.min(b.length, max); i++) { if (b[i] === 0) break; s += String.fromCharCode(b[i]); } return s; };
+const concat = parts => { let n = 0; for (const p of parts) n += p.length; const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; } return out; };
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+async function inflate(b) {
+  try {
+    const stream = new Blob([b]).stream().pipeThrough(new DecompressionStream("deflate"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  } catch { return null; }
+}
+const fmtBytes = n => n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(1) + " KB" : (n / 1048576).toFixed(2) + " MB";
+
+/* ---------- AI signal patterns ---------- */
+const AI_RE = /midjourney|dall[·\-\s]?e|openai|chatgpt|gpt-4o|gpt-image|\bsora\b|firefly|stable.?diffusion|\bsdxl\b|comfyui|automatic1111|\ba1111\b|novelai|leonardo\.?ai|ideogram|gemini|imagen|google ai|\bflux(\.1)?\b|black forest labs|invokeai|\bkrea\b|playground ?ai|nightcafe|dreamstudio|runway ?ml|bing image creator|microsoft designer|meta ai|grok|recraft|seedream|stability ai|trainedalgorithmicmedia|\baigc\b|negative prompt|sampler: |cfg scale/i;
+const PNG_AI_KEYS = new Set(["parameters", "prompt", "workflow", "dream", "sd-metadata", "invokeai_metadata", "invokeai_graph", "negative_prompt", "generation_data", "aigc", "comment", "description", "source"]);
+
+function addField(R, cat, label, value, src) {
+  if (value == null) return;
+  value = String(value).replace(/\0/g, "").trim();
+  if (!value) return;
+  if (value.length > 6000) value = value.slice(0, 6000) + " …";
+  if (cat !== "location" && AI_RE.test(value)) cat = "ai";
+  R.fields.push({ cat, label, value, src });
+}
+function addBlock(R, name, tag, size, kept, note) {
+  R.blocks.push({ name, tag, size, kept, note });
+}
+
+/* ---------- EXIF / TIFF ---------- */
+function parseTiff(b) {
+  const out = { ifd0: {}, exif: {}, gps: {}, le: false, entries: 0 };
+  if (b.length < 8) return out;
+  const le = b[0] === 0x49; out.le = le;
+  const r16 = o => le ? b[o] | (b[o + 1] << 8) : (b[o] << 8) | b[o + 1];
+  const r32 = o => (le ? (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) : ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3])) >>> 0;
+  const SZ = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 6: 1, 7: 1, 8: 2, 9: 4, 10: 8, 11: 4, 12: 8 };
+  const read = (off, target) => {
+    if (!off || off + 2 > b.length) return;
+    const n = r16(off);
+    for (let i = 0; i < n; i++) {
+      const e = off + 2 + i * 12; if (e + 12 > b.length) break;
+      const tag = r16(e), type = r16(e + 2), count = r32(e + 4);
+      const size = (SZ[type] || 1) * count;
+      const vo = size <= 4 ? e + 8 : r32(e + 8);
+      if (vo + size > b.length || count > 1e6) continue;
+      let v;
+      if (type === 2) v = latin1.decode(b.subarray(vo, vo + count)).replace(/\0+$/, "");
+      else if (type === 3) v = count === 1 ? r16(vo) : Array.from({ length: Math.min(count, 16) }, (_, k) => r16(vo + 2 * k));
+      else if (type === 4 || type === 9) v = count === 1 ? r32(vo) : Array.from({ length: Math.min(count, 16) }, (_, k) => r32(vo + 4 * k));
+      else if (type === 5 || type === 10) {
+        v = Array.from({ length: Math.min(count, 8) }, (_, k) => { const d = r32(vo + 8 * k + 4); return d ? r32(vo + 8 * k) / d : 0; });
+        if (count === 1) v = v[0];
+      } else v = b.subarray(vo, vo + count);
+      target[tag] = v; out.entries++;
+    }
+  };
+  read(r32(4), out.ifd0);
+  if (typeof out.ifd0[0x8769] === "number") read(out.ifd0[0x8769], out.exif);
+  if (typeof out.ifd0[0x8825] === "number") read(out.ifd0[0x8825], out.gps);
+  return out;
+}
+function tiffText(v, le) {
+  if (typeof v === "string") return v;
+  if (v instanceof Uint8Array) {
+    const head = latin1.decode(v.subarray(0, 8));
+    if (head.startsWith("ASCII")) return latin1.decode(v.subarray(8));
+    if (head.startsWith("UNICODE")) return new TextDecoder(le ? "utf-16le" : "utf-16be").decode(v.subarray(8));
+    if (/^\0{8}/.test(head)) return utf8.decode(v.subarray(8));
+    return utf8.decode(v);
+  }
+  return Array.isArray(v) ? v.join(", ") : String(v);
+}
+const xpText = v => v instanceof Uint8Array ? new TextDecoder("utf-16le").decode(v) : String(v);
+function dms(v, ref) {
+  if (!Array.isArray(v) || v.length < 3) return null;
+  let d = v[0] + v[1] / 60 + v[2] / 3600;
+  if (ref === "S" || ref === "W") d = -d;
+  return d;
+}
+function exifFields(R, t, src) {
+  const I = t.ifd0, E = t.exif, G = t.gps;
+  const tx = v => tiffText(v, t.le);
+  const map = [
+    [I, 0x010F, "device", "Camera make"], [I, 0x0110, "device", "Camera model"], [I, 0x0131, "software", "Software"],
+    [I, 0x0132, "time", "Modified"], [I, 0x010E, "other", "Description"], [I, 0x013B, "person", "Artist"],
+    [I, 0x8298, "person", "Copyright"], [I, 0x010D, "other", "Document name"], [I, 0xA430, "person", "Owner"],
+    [E, 0x9003, "time", "Taken"], [E, 0x9004, "time", "Digitized"], [E, 0x9010, "time", "Time zone"],
+    [E, 0x9286, "other", "User comment"], [E, 0xA433, "device", "Lens make"], [E, 0xA434, "device", "Lens model"],
+    [E, 0xA431, "device", "Camera serial number"], [E, 0xA435, "device", "Lens serial number"], [E, 0xA430, "person", "Camera owner"],
+    [E, 0xA420, "other", "Unique image ID"]
+  ];
+  for (const [ifd, tag, cat, label] of map) if (ifd[tag] != null) addField(R, cat, label, tx(ifd[tag]), src);
+  const xp = [[0x9C9B, "Title"], [0x9C9C, "Comment"], [0x9C9D, "Author"], [0x9C9E, "Keywords"], [0x9C9F, "Subject"]];
+  for (const [tag, label] of xp) if (I[tag] != null) addField(R, tag === 0x9C9D ? "person" : "other", label, xpText(I[tag]), src);
+  const shot = [];
+  if (E[0x829A]) shot.push(E[0x829A] < 1 ? "1/" + Math.round(1 / E[0x829A]) + " s" : E[0x829A] + " s");
+  if (E[0x829D]) shot.push("f/" + (+E[0x829D]).toFixed(1));
+  if (E[0x8827]) shot.push("ISO " + (Array.isArray(E[0x8827]) ? E[0x8827][0] : E[0x8827]));
+  if (E[0x920A]) shot.push((+E[0x920A]).toFixed(0) + " mm");
+  if (shot.length) addField(R, "device", "Exposure", shot.join(" · "), src);
+  const lat = dms(G[2], G[1]), lon = dms(G[4], G[3]);
+  if (lat != null && lon != null) addField(R, "location", "GPS position", lat.toFixed(5) + ", " + lon.toFixed(5), src);
+  else if (Object.keys(G).length) addField(R, "location", "GPS data", Object.keys(G).length + " GPS fields", src);
+  if (typeof G[6] === "number") addField(R, "location", "Altitude", G[6].toFixed(0) + " m", src);
+}
+// Minimal big-endian TIFF writer: groups = [ifd0, exifIfd, gpsIfd], entries are [tag, type, value].
+function buildTiff(groups) {
+  const raw = (t, v) => t === 2 ? [...enc.encode(v), 0] : t === 3 ? be16b(v) : t === 4 ? be32b(v) : t === 5 ? v.flatMap(([n, d]) => [...be32b(n), ...be32b(d)]) : [...v];
+  const count = (t, v) => t === 2 ? enc.encode(v).length + 1 : t === 5 ? v.length : (t === 1 || t === 7) ? v.length : 1;
+  const ifds = groups.map(g => g.map(e => e.slice()));
+  if (ifds[1].length) ifds[0].push([0x8769, 4, 0]);
+  if (ifds[2].length) ifds[0].push([0x8825, 4, 0]);
+  ifds.forEach(g => g.sort((a, b) => a[0] - b[0]));
+  const ifdSize = g => 2 + g.length * 12 + 4;
+  const dataSize = g => g.reduce((s, [, ty, v]) => { const n = ty === 4 ? 4 : raw(ty, v).length; return s + (n > 4 ? n + (n & 1) : 0); }, 0);
+  const starts = []; let off = 8;
+  for (const g of ifds) { starts.push(g.length ? off : 0); if (g.length) off += ifdSize(g) + dataSize(g); }
+  for (const e of ifds[0]) { if (e[0] === 0x8769) e[2] = starts[1]; if (e[0] === 0x8825) e[2] = starts[2]; }
+  const out = [0x4D, 0x4D, 0, 42, ...be32b(8)];
+  ifds.forEach((g, i) => {
+    if (!g.length) return;
+    let dataOff = starts[i] + ifdSize(g); const ent = [], dat = [];
+    for (const [tag, ty, v] of g) {
+      const r = raw(ty, v);
+      ent.push(...be16b(tag), ...be16b(ty), ...be32b(count(ty, v)));
+      if (r.length <= 4) ent.push(...r, ...Array(4 - r.length).fill(0));
+      else { ent.push(...be32b(dataOff)); dat.push(...r); if (r.length & 1) dat.push(0); dataOff += r.length + (r.length & 1); }
+    }
+    out.push(...be16b(g.length), ...ent, 0, 0, 0, 0, ...dat);
+  });
+  return new Uint8Array(out);
+}
+const orientTiff = o => buildTiff([[[0x0112, 3, o]], [], []]);
+const isOrientOnly = t => t.entries === 1 && t.ifd0[0x0112] != null;
+
+/* ---------- XMP, IPTC, C2PA ---------- */
+const unxml = s => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&amp;/g, "&");
+function xmpGet(x, name) {
+  const q = name.replace(":", "\\:");
+  let m = x.match(new RegExp("\\b" + q + "\\s*=\\s*\"([^\"]*)\""));
+  if (m) return unxml(m[1]);
+  m = x.match(new RegExp("<" + q + "(?:\\s[^>]*)?>([\\s\\S]*?)</" + q + ">"));
+  if (m) return unxml(m[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  return null;
+}
+const SOURCE_TYPES = {
+  trainedalgorithmicmedia: "Generated by AI",
+  compositewithtrainedalgorithmicmedia: "Edited with generative AI",
+  algorithmicmedia: "Computer generated",
+  compositesynthetic: "Composite with synthetic elements",
+  digitalcapture: "Digital camera capture"
+};
+function xmpFields(R, x, src) {
+  const n0 = R.fields.length;
+  const list = [
+    ["Iptc4xmpExt:DigitalSourceType", "ai", "Digital source type"], ["xmp:CreatorTool", "software", "Creator tool"],
+    ["photoshop:Credit", "other", "Credit"], ["dc:creator", "person", "Creator"], ["dc:rights", "person", "Rights"],
+    ["dc:title", "other", "Title"], ["dc:description", "other", "Description"], ["dc:subject", "other", "Keywords"],
+    ["xmp:CreateDate", "time", "Created"], ["xmp:ModifyDate", "time", "Modified"], ["photoshop:DateCreated", "time", "Date created"],
+    ["exif:GPSLatitude", "location", "GPS latitude"], ["exif:GPSLongitude", "location", "GPS longitude"],
+    ["photoshop:City", "location", "City"], ["photoshop:State", "location", "State"], ["photoshop:Country", "location", "Country"],
+    ["Iptc4xmpCore:Location", "location", "Location"], ["tiff:Make", "device", "Camera make"], ["tiff:Model", "device", "Camera model"],
+    ["aux:SerialNumber", "device", "Camera serial number"], ["exifEX:BodySerialNumber", "device", "Camera serial number"],
+    ["aux:Lens", "device", "Lens"], ["xmpMM:DocumentID", "other", "Document ID"], ["xmpMM:OriginalDocumentID", "other", "Original document ID"],
+    ["TC260:AIGC", "ai", "AIGC label"]
+  ];
+  for (const [name, cat, label] of list) {
+    let v = xmpGet(x, name);
+    if (v == null) continue;
+    if (name === "Iptc4xmpExt:DigitalSourceType") {
+      const key = v.split("/").pop().toLowerCase();
+      if (key === "digitalcapture") { addField(R, "device", label, SOURCE_TYPES[key], src); continue; }
+      v = (SOURCE_TYPES[key] || v) + "  (" + v.split("/").pop() + ")";
+    }
+    addField(R, cat, label, v, src);
+  }
+  const hist = (x.match(/stEvt:softwareAgent\s*=\s*"([^"]+)"/g) || []).map(s => unxml(s.split('"')[1]));
+  if (hist.length) addField(R, "software", "Edit history", [...new Set(hist)].join(", "), src);
+  if (/c2pa|contentauth/i.test(x)) addField(R, "ai", "Content Credentials reference", "XMP points to a C2PA manifest", src);
+  if (R.fields.length === n0) addField(R, "other", "XMP packet", x.length.toLocaleString() + " characters of descriptive data", src);
+}
+function iptcFields(R, d, src) {
+  const names = { 0x05: ["other", "Title"], 0x19: ["other", "Keyword"], 0x50: ["person", "By-line"], 0x55: ["person", "By-line title"], 0x5A: ["location", "City"], 0x5F: ["location", "State"], 0x65: ["location", "Country"], 0x6E: ["other", "Credit"], 0x73: ["other", "Source"], 0x74: ["person", "Copyright"], 0x78: ["other", "Caption"], 0x7A: ["person", "Caption writer"], 0x37: ["time", "Date created"] };
+  let found = 0;
+  for (let i = 0; i + 5 <= d.length;) {
+    if (d[i] === 0x1C && d[i + 1] === 0x02) {
+      const tag = d[i + 2], len = u16(d, i + 3);
+      if (names[tag] && i + 5 + len <= d.length) { addField(R, names[tag][0], names[tag][1], utf8.decode(d.subarray(i + 5, i + 5 + len)), src); found++; }
+      i += 5 + len;
+    } else i++;
+  }
+  return found;
+}
+function cborText(s, p) {
+  const c = s.charCodeAt(p);
+  let len, st;
+  if (c >= 0x60 && c <= 0x77) { len = c - 0x60; st = p + 1; }
+  else if (c === 0x78) { len = s.charCodeAt(p + 1); st = p + 2; }
+  else if (c === 0x79) { len = (s.charCodeAt(p + 1) << 8) | s.charCodeAt(p + 2); st = p + 3; }
+  else return null;
+  return s.substr(st, len);
+}
+function c2paFields(R, b, src) {
+  const s = latin1.decode(b);
+  addField(R, "ai", "Content Credentials (C2PA)", "Signed provenance manifest, " + fmtBytes(b.length), src);
+  let gen = null;
+  const re = /claim_generator(?!_)/g; let m;
+  while (!gen && (m = re.exec(s))) gen = cborText(s, m.index + 15);
+  if (!gen) { const i = s.indexOf("claim_generator_info"); if (i >= 0) { const j = s.indexOf("name", i); if (j > 0 && j - i < 80) gen = cborText(s, j + 4); } }
+  if (gen) addField(R, "ai", "Made with", utf8.decode(Uint8Array.from(gen, c => c.charCodeAt(0))), src);
+  if (/trainedAlgorithmicMedia/.test(s)) addField(R, "ai", "AI disclosure", "Manifest declares the image AI-generated", src);
+  const orgs = ["OpenAI", "Google", "Adobe", "Microsoft", "Meta", "Truepic", "Leica", "Sony", "Nikon", "Samsung", "Qualcomm"].filter(o => s.includes(o));
+  if (orgs.length) addField(R, "ai", "Signer mentions", orgs.join(", "), src);
+}
+
+/* ---------- JPEG ---------- */
+function cleanJpeg(b, opt, R) {
+  const parts = [b.subarray(0, 2)];
+  let p = 2, imageBytes = 2, wroteOrient = false;
+  while (p < b.length - 1) {
+    if (b[p] !== 0xFF) throw new Error("The JPEG structure is damaged near byte " + p + ".");
+    const m = b[p + 1];
+    if (m === 0xFF) { p++; continue; }
+    if (m === 0xD9) { parts.push(b.subarray(p, p + 2)); imageBytes += 2; p += 2; break; }
+    if ((m >= 0xD0 && m <= 0xD7) || m === 0x01) { parts.push(b.subarray(p, p + 2)); imageBytes += 2; p += 2; continue; }
+    const L = u16(b, p + 2), e = p + 2 + L;
+    if (e > b.length) throw new Error("The JPEG file is cut off.");
+    if (m === 0xDA) {
+      let q = e;
+      while (q < b.length - 1 && !(b[q] === 0xFF && b[q + 1] !== 0 && !(b[q + 1] >= 0xD0 && b[q + 1] <= 0xD7))) q++;
+      if (q >= b.length - 1) q = b.length;
+      parts.push(b.subarray(p, q)); imageBytes += q - p; p = q; continue;
+    }
+    const seg = b.subarray(p, e), d = b.subarray(p + 4, e), id = cstr(d), size = e - p;
+    const tag = "APP" + (m - 0xE0);
+    if (m === 0xE0) {
+      if (id === "JFIF" && d.length >= 14) {
+        if (d[12] || d[13]) {
+          parts.push(new Uint8Array([0xFF, 0xE0, 0x00, 0x10, ...d.subarray(0, 12), 0, 0]));
+          addBlock(R, "JFIF thumbnail", tag, size - 18, false);
+          addBlock(R, "JFIF header", tag, 18, true, "Basic image header");
+        } else { parts.push(seg); addBlock(R, "JFIF header", tag, size, true, "Basic image header"); }
+      } else addBlock(R, id ? id + " block" : "APP0 block", tag, size, false);
+    } else if (m === 0xE1 && startsWith(d, "Exif\0")) {
+      const t = parseTiff(d.subarray(6));
+      const orient = t.ifd0[0x0112] || 1;
+      if (opt.keepOrient && isOrientOnly(t)) { parts.push(seg); addBlock(R, "EXIF rotation flag", tag, size, true, "Orientation " + orient); wroteOrient = true; }
+      else {
+        exifFields(R, t, "EXIF");
+        addBlock(R, "EXIF", tag, size, false, t.entries + " fields");
+        if (opt.keepOrient && orient > 1 && !wroteOrient) {
+          const tiff = orientTiff(orient);
+          parts.push(new Uint8Array([0xFF, 0xE1, ...be16b(2 + 6 + tiff.length), 0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff]));
+          wroteOrient = true;
+        }
+      }
+    } else if (m === 0xE1 && id === "http://ns.adobe.com/xap/1.0/") {
+      xmpFields(R, utf8.decode(d.subarray(id.length + 1)), "XMP"); addBlock(R, "XMP", tag, size, false);
+    } else if (m === 0xE1 && id === "http://ns.adobe.com/xmp/extension/") {
+      const x = utf8.decode(d.subarray(id.length + 1 + 40));
+      if (/c2pa|contentauth/i.test(x)) addField(R, "ai", "Content Credentials reference", "Extended XMP points to a C2PA manifest", "XMP");
+      addBlock(R, "Extended XMP", tag, size, false);
+    } else if (m === 0xE2 && id === "ICC_PROFILE") {
+      if (opt.keepIcc) { parts.push(seg); addBlock(R, "ICC color profile", tag, size, true, "Kept for accurate color"); }
+      else addBlock(R, "ICC color profile", tag, size, false);
+    } else if (m === 0xE2 && id === "MPF") {
+      addBlock(R, "Multi-picture index", tag, size, false, "Points to extra embedded images");
+    } else if (m === 0xEB) {
+      c2paFields(R, d, "C2PA"); addBlock(R, "C2PA / JUMBF manifest", tag, size, false);
+    } else if (m === 0xED) {
+      const n = iptcFields(R, d, "IPTC");
+      if (!n) addField(R, "other", "Photoshop data", fmtBytes(size) + " of Photoshop resources", "IPTC");
+      addBlock(R, "IPTC / Photoshop", tag, size, false);
+    } else if (m === 0xEE && id.startsWith("Adobe")) {
+      parts.push(seg); addBlock(R, "Adobe color transform", tag, size, true, "Needed to decode colors");
+    } else if (m >= 0xE0 && m <= 0xEF) {
+      addBlock(R, id ? id + " block" : "Application block", tag, size, false);
+      if (id && AI_RE.test(id)) addField(R, "ai", "Application block", id, tag);
+    } else if (m === 0xFE) {
+      addField(R, "other", "Comment", utf8.decode(d), "COM"); addBlock(R, "Comment", "COM", size, false);
+    } else { parts.push(seg); imageBytes += size; }
+    p = e;
+  }
+  if (p < b.length) {
+    const tail = b.subarray(p);
+    const s = latin1.decode(tail.subarray(0, 4096));
+    let note = "Data after the end of the image";
+    if (/\xFF\xD8\xFF/.test(s)) note = "Extra embedded image (preview, depth map or motion photo)";
+    if (/c2pa/.test(latin1.decode(tail))) addField(R, "ai", "Content Credentials (C2PA)", "Manifest stored after the image data", "Trailer");
+    addBlock(R, "Trailing data", "EOF", tail.length, false, note);
+  }
+  addBlock(R, "Image data", "SOF/DQT/DHT/SOS", imageBytes, true, "Pixels, untouched");
+  return concat(parts);
+}
+
+/* ---------- PNG ---------- */
+const PNG_KEEP = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "cHRM", "gAMA", "sBIT", "sRGB", "bKGD", "pHYs", "acTL", "fcTL", "fdAT", "cICP", "mDCv", "cLLi"]);
+function pngChunk(type, data) {
+  const td = concat([enc.encode(type), data]);
+  return concat([new Uint8Array(be32b(data.length)), td, new Uint8Array(be32b(crc32(td)))]);
+}
+async function cleanPng(b, opt, R) {
+  const parts = [b.subarray(0, 8)];
+  let p = 8, imageBytes = 8;
+  while (p + 12 <= b.length) {
+    const L = u32(b, p), type = ascii(b, p + 4, 4), e = p + 12 + L;
+    if (e > b.length) throw new Error("The PNG file is cut off.");
+    const seg = b.subarray(p, e), d = b.subarray(p + 8, p + 8 + L);
+    p = e;
+    if (type === "IEND") { parts.push(seg); imageBytes += seg.length; break; }
+    if (PNG_KEEP.has(type) || type.charCodeAt(0) < 97) {
+      parts.push(seg); imageBytes += seg.length;
+      continue;
+    }
+    if (type === "iCCP") {
+      if (opt.keepIcc) { parts.push(seg); addBlock(R, "ICC color profile", type, seg.length, true, "Kept for accurate color"); }
+      else addBlock(R, "ICC color profile", type, seg.length, false);
+      continue;
+    }
+    if (type === "tEXt" || type === "zTXt" || type === "iTXt") {
+      const k = d.indexOf(0); const key = latin1.decode(d.subarray(0, k));
+      let text = null;
+      if (type === "tEXt") text = latin1.decode(d.subarray(k + 1));
+      else if (type === "zTXt") { const z = await inflate(d.subarray(k + 2)); text = z ? latin1.decode(z) : "(compressed text)"; }
+      else {
+        const flag = d[k + 1], l1 = d.indexOf(0, k + 3), l2 = d.indexOf(0, l1 + 1);
+        let body = d.subarray(l2 + 1);
+        if (flag) body = (await inflate(body)) || new Uint8Array();
+        text = utf8.decode(body);
+      }
+      if (key === "XML:com.adobe.xmp") { xmpFields(R, text, "XMP"); addBlock(R, "XMP", type, seg.length, false); continue; }
+      if (/^Raw profile type (exif|APP1)/i.test(key)) { addField(R, "device", "EXIF (text form)", "Hex-encoded EXIF block", type); addBlock(R, "EXIF (text)", type, seg.length, false); continue; }
+      const lk = key.toLowerCase();
+      const cat = PNG_AI_KEYS.has(lk) && (lk !== "comment" && lk !== "description" && lk !== "source" || AI_RE.test(text)) ? "ai"
+        : lk === "author" || lk === "copyright" ? "person" : lk.includes("time") || lk.includes("date") ? "time" : lk === "software" ? "software" : "other";
+      const label = { parameters: "Generation parameters", prompt: "ComfyUI prompt graph", workflow: "ComfyUI workflow" }[lk] || key;
+      addField(R, cat, label, text, type);
+      addBlock(R, "Text: " + key, type, seg.length, false);
+      continue;
+    }
+    if (type === "eXIf") {
+      const t = parseTiff(d); const orient = t.ifd0[0x0112] || 1;
+      if (opt.keepOrient && isOrientOnly(t)) { parts.push(seg); addBlock(R, "EXIF rotation flag", type, seg.length, true, "Orientation " + orient); continue; }
+      exifFields(R, t, "EXIF"); addBlock(R, "EXIF", type, seg.length, false, t.entries + " fields");
+      if (opt.keepOrient && orient > 1) parts.push(pngChunk("eXIf", orientTiff(orient)));
+      continue;
+    }
+    if (type === "caBX") { c2paFields(R, d, "C2PA"); addBlock(R, "C2PA manifest", type, seg.length, false); continue; }
+    if (type === "tIME") { addField(R, "time", "Last modified", `${u16(d, 0)}-${String(d[2]).padStart(2, "0")}-${String(d[3]).padStart(2, "0")} ${String(d[4]).padStart(2, "0")}:${String(d[5]).padStart(2, "0")}`, type); addBlock(R, "Timestamp", type, seg.length, false); continue; }
+    addBlock(R, "Private chunk", type, seg.length, false);
+  }
+  if (p < b.length) addBlock(R, "Trailing data", "EOF", b.length - p, false, "Data after the end of the image");
+  addBlock(R, "Image data", "IHDR/IDAT", imageBytes, true, "Pixels, untouched");
+  return concat(parts);
+}
+
+/* ---------- WebP ---------- */
+const WEBP_IMAGE = new Set(["VP8 ", "VP8L", "ALPH", "ANIM", "ANMF"]);
+function cleanWebp(b, opt, R) {
+  const chunks = []; let vp8x = null, iccKept = false, imageBytes = 12, orient = 1;
+  let p = 12; const end = Math.min(b.length, 8 + le32(b, 4));
+  while (p + 8 <= end) {
+    const type = ascii(b, p, 4), size = le32(b, p + 4), e = p + 8 + size + (size & 1);
+    if (p + 8 + size > b.length) throw new Error("The WebP file is cut off.");
+    const seg = b.subarray(p, Math.min(e, b.length)), d = b.subarray(p + 8, p + 8 + size);
+    p = e;
+    if (type === "VP8X") { vp8x = seg.slice(); chunks.push(vp8x); imageBytes += seg.length; continue; }
+    if (WEBP_IMAGE.has(type)) { chunks.push(seg); imageBytes += seg.length; continue; }
+    if (type === "ICCP") {
+      if (opt.keepIcc) { chunks.push(seg); iccKept = true; addBlock(R, "ICC color profile", type, seg.length, true, "Kept for accurate color"); }
+      else addBlock(R, "ICC color profile", type, seg.length, false);
+      continue;
+    }
+    if (type === "EXIF") {
+      const t = parseTiff(startsWith(d, "Exif\0") ? d.subarray(6) : d); orient = t.ifd0[0x0112] || 1;
+      if (opt.keepOrient && isOrientOnly(t)) { chunks.push(seg); orient = -1; addBlock(R, "EXIF rotation flag", type, seg.length, true, "Orientation " + t.ifd0[0x0112]); continue; }
+      exifFields(R, t, "EXIF"); addBlock(R, "EXIF", type, seg.length, false, t.entries + " fields"); continue;
+    }
+    if (type === "XMP ") { xmpFields(R, utf8.decode(d), "XMP"); addBlock(R, "XMP", type, seg.length, false); continue; }
+    if (type === "C2PA") { c2paFields(R, d, "C2PA"); addBlock(R, "C2PA manifest", type, seg.length, false); continue; }
+    addBlock(R, "Unknown chunk", type.trim(), seg.length, false);
+  }
+  let addOrient = opt.keepOrient && orient > 1 && vp8x;
+  if (addOrient) { const t = orientTiff(orient); chunks.push(concat([enc.encode("EXIF"), new Uint8Array(le32b(t.length)), t, t.length & 1 ? new Uint8Array(1) : new Uint8Array()])); }
+  if (vp8x) {
+    let f = vp8x[8] & ~0x0C;                // clear EXIF + XMP flags
+    if (!iccKept) f &= ~0x20;
+    if (addOrient || orient === -1) f |= 0x08;
+    vp8x[8] = f;
+  }
+  if (b.length > end) addBlock(R, "Trailing data", "EOF", b.length - end, false, "Data after the end of the image");
+  addBlock(R, "Image data", "VP8/VP8L", imageBytes, true, "Pixels, untouched");
+  const body = concat(chunks);
+  return concat([enc.encode("RIFF"), new Uint8Array(le32b(body.length + 4)), enc.encode("WEBP"), body]);
+}
+
+/* ---------- entry point ---------- */
+function sniff(b) {
+  if (b[0] === 0xFF && b[1] === 0xD8) return "jpeg";
+  if (startsWith(b, "\x89PNG\r\n\x1a\n")) return "png";
+  if (startsWith(b, "RIFF") && startsWith(b, "WEBP", 8)) return "webp";
+  if (startsWith(b, "ftyp", 4)) return "heic";
+  if (startsWith(b, "GIF8")) return "gif";
+  return null;
+}
+async function processBytes(b, opt) {
+  const R = { format: sniff(b), blocks: [], fields: [] };
+  if (R.format === "jpeg") R.out = cleanJpeg(b, opt, R);
+  else if (R.format === "png") R.out = await cleanPng(b, opt, R);
+  else if (R.format === "webp") R.out = cleanWebp(b, opt, R);
+  else {
+    const what = R.format === "heic" ? "HEIC/AVIF" : R.format === "gif" ? "GIF" : "This file type";
+    throw new Error(what + " isn't supported. Use a JPG, PNG or WebP image.");
+  }
+  R.removed = R.blocks.filter(x => !x.kept);
+  R.removedBytes = b.length - R.out.length;
+  const check = { format: R.format, blocks: [], fields: [] };
+  if (R.format === "jpeg") cleanJpeg(R.out, opt, check);
+  else if (R.format === "png") await cleanPng(R.out, opt, check);
+  else cleanWebp(R.out, opt, check);
+  R.verified = check.blocks.every(x => x.kept) && check.fields.length === 0;
+  return R;
+}
+
+/* ---------- app state + UI ---------- */
+const $ = id => document.getElementById(id);
+const items = [];
+let nextId = 1;
+const opts = () => ({ keepIcc: $("keepIcc").checked, keepOrient: $("keepOrient").checked });
+const CAT_LABEL = { ai: "AI tags", location: "Location", device: "Camera", person: "Personal", time: "Dates", software: "Software", other: "Other" };
+const CAT_ORDER = ["ai", "location", "device", "person", "time", "software", "other"];
+const EXT = { jpeg: ".jpg", png: ".png", webp: ".webp" };
+
+function cleanName(name, format) {
+  const dot = name.lastIndexOf(".");
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot).toLowerCase() : "";
+  const keepExt = (format === "jpeg" && (ext === ".jpg" || ext === ".jpeg")) || ext === EXT[format];
+  return base + "-clean" + (keepExt ? ext : EXT[format]);
+}
+
+async function addFiles(files, sample = false) {
+  if (!sample) for (let i = items.length - 1; i >= 0; i--) if (items[i].sample) removeItem(items[i].id);
+  for (const file of files) {
+    const it = { id: nextId++, name: file.name || "pasted-image.png", size: file.size, sample, open: false, file };
+    it.url = URL.createObjectURL(file);
+    items.push(it);
+    await runItem(it);
+  }
+  render();
+}
+async function runItem(it) {
+  try {
+    const b = new Uint8Array(await it.file.arrayBuffer());
+    it.result = await processBytes(b, opts());
+    it.error = null;
+    it.outName = cleanName(it.name, it.result.format);
+  } catch (e) { it.result = null; it.error = e.message || String(e); }
+}
+function removeItem(id) {
+  const i = items.findIndex(x => x.id === id);
+  if (i >= 0) { URL.revokeObjectURL(items[i].url); items.splice(i, 1); }
+}
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+function render() {
+  const list = $("list"); list.replaceChildren();
+  const ok = items.filter(x => x.result);
+  $("zipAll").disabled = ok.length === 0;
+  $("clearAll").disabled = items.length === 0;
+  const sum = $("summary"); sum.replaceChildren();
+  if (items.length) {
+    const fields = ok.reduce((s, x) => s + x.result.fields.length, 0);
+    const bytes = ok.reduce((s, x) => s + x.result.removedBytes, 0);
+    const ai = ok.filter(x => x.result.fields.some(f => f.cat === "ai")).length;
+    const parts = [["Images", items.length], ["Fields found", fields], ["With AI tags", ai], ["Removed", fmtBytes(Math.max(0, bytes))]];
+    for (const [k, v] of parts) { const s = el("span", null, k + " "); s.append(el("b", null, String(v))); sum.append(s); }
+  }
+  for (const it of items) list.append(card(it));
+}
+
+function card(it) {
+  const c = el("article", "card");
+  const row = el("div", "row");
+  const img = el("img", "thumb"); img.src = it.url; img.alt = ""; img.loading = "lazy";
+  img.onload = () => { it.dims = img.naturalWidth + "×" + img.naturalHeight; const m = c.querySelector(".dims"); if (m) m.textContent = it.dims; };
+  const info = el("div", "info");
+  info.append(el("div", "name", it.name));
+  const R = it.result;
+  const meta = el("div", "meta");
+  meta.append(document.createTextNode((R ? R.format.toUpperCase() : "?") + " · "));
+  meta.append(el("span", "dims", it.dims || "…"));
+  meta.append(document.createTextNode(" · " + fmtBytes(it.size) + (R ? " → " + fmtBytes(R.out.length) : "")));
+  info.append(meta);
+  const chips = el("div", "chips");
+  if (it.sample) chips.append(el("span", "chip sample", "Sample"));
+  if (R) {
+    const counts = {};
+    for (const f of R.fields) counts[f.cat] = (counts[f.cat] || 0) + 1;
+    for (const k of CAT_ORDER) if (counts[k]) chips.append(el("span", "chip " + k, CAT_LABEL[k] + " " + counts[k]));
+    if (!R.fields.length && !R.removed.length) chips.append(el("span", "chip ok", "No metadata found"));
+  }
+  info.append(chips);
+  if (it.error) info.append(el("div", "status err", it.error));
+  else if (R) {
+    const msg = R.removed.length
+      ? `Removed ${R.removed.length} block${R.removed.length > 1 ? "s" : ""} (${fmtBytes(R.removedBytes)})` + (R.verified ? " · checked: nothing left" : " · some data could not be removed")
+      : "Already clean · nothing to remove";
+    info.append(el("div", "status " + (R.verified ? "ok" : "err"), msg));
+  }
+  const side = el("div", "side");
+  if (R) {
+    const dl = el("button", "primary", "Save clean copy");
+    dl.onclick = () => save(it.outName, R.out);
+    side.append(dl);
+    const tg = el("button", "linkish", it.open ? "Hide details" : "Show what's inside");
+    tg.setAttribute("aria-expanded", String(it.open));
+    tg.onclick = () => { it.open = !it.open; render(); };
+    side.append(tg);
+  }
+  const rm = el("button", "linkish", "Remove");
+  rm.onclick = () => { removeItem(it.id); render(); };
+  side.append(rm);
+  row.append(img, info, side);
+  c.append(row);
+  if (R && it.open) c.append(detail(R));
+  return c;
+}
+
+function detail(R) {
+  const d = el("div", "detail");
+  const s1 = el("section");
+  s1.append(el("h3", null, R.fields.length ? `Found in the original (${R.fields.length})` : "Found in the original"));
+  if (R.fields.length) {
+    const w = el("div", "tablewrap"); const t = el("table");
+    const hr = el("tr"); for (const h of ["Type", "Field", "Value", "Source"]) hr.append(el("th", null, h));
+    t.append(hr);
+    const sorted = R.fields.slice().sort((a, b) => CAT_ORDER.indexOf(a.cat) - CAT_ORDER.indexOf(b.cat));
+    for (const f of sorted) {
+      const tr = el("tr");
+      const tc = el("td"); tc.append(el("span", "chip " + f.cat, CAT_LABEL[f.cat])); tr.append(tc);
+      tr.append(el("td", "k", f.label));
+      const vc = el("td", "v"); vc.append(el("pre", "val", f.value)); tr.append(vc);
+      tr.append(el("td", "tag", f.src));
+      t.append(tr);
+    }
+    w.append(t); s1.append(w);
+  } else s1.append(el("p", "tag", "No readable metadata fields."));
+  const s2 = el("section");
+  s2.append(el("h3", null, "File blocks"));
+  const w2 = el("div", "tablewrap"); const t2 = el("table");
+  const hr2 = el("tr"); for (const h of ["Block", "Marker", "Size", "Result"]) hr2.append(el("th", null, h));
+  t2.append(hr2);
+  for (const bl of R.blocks) {
+    const tr = el("tr");
+    const nc = el("td", "k", bl.name); if (bl.note) { nc.append(el("br")); nc.append(el("span", "tag", bl.note)); }
+    tr.append(nc, el("td", "tag", bl.tag), el("td", "num", fmtBytes(bl.size)), el("td", bl.kept ? "act-kept" : "act-removed", bl.kept ? "Kept" : "Removed"));
+    t2.append(tr);
+  }
+  w2.append(t2); s2.append(w2);
+  d.append(s1, s2);
+  return d;
+}
+
+/* ---------- saving ---------- */
+let toastTimer;
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200); }
+function save(filename, data) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([data]));
+  a.download = filename; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast("Saved " + filename);
+}
+
+/* ---------- zip (stored, no compression: images are already compressed) ---------- */
+function makeZip(files) {
+  const now = new Date();
+  const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  const locals = [], centrals = []; let offset = 0;
+  const used = new Set();
+  for (const f of files) {
+    let name = f.name, n = 2;
+    while (used.has(name.toLowerCase())) { const dot = f.name.lastIndexOf("."); name = f.name.slice(0, dot) + " (" + n++ + ")" + f.name.slice(dot); }
+    used.add(name.toLowerCase());
+    const nb = enc.encode(name), crc = crc32(f.data), sz = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, time, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true); lh.setUint32(18, sz, true); lh.setUint32(22, sz, true);
+    lh.setUint16(26, nb.length, true); lh.setUint16(28, 0, true);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+    ch.setUint16(12, time, true); ch.setUint16(14, date, true); ch.setUint32(16, crc, true); ch.setUint32(20, sz, true); ch.setUint32(24, sz, true);
+    ch.setUint16(28, nb.length, true); ch.setUint32(42, offset, true);
+    locals.push(new Uint8Array(lh.buffer), nb, f.data);
+    centrals.push(new Uint8Array(ch.buffer), nb);
+    offset += 30 + nb.length + sz;
+  }
+  const cd = concat(centrals);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cd.length, true); end.setUint32(16, offset, true);
+  return concat([...locals, cd, new Uint8Array(end.buffer)]);
+}
+
+/* ---------- inputs ---------- */
+const tray = $("tray"), picker = $("picker");
+tray.addEventListener("click", () => picker.click());
+tray.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); picker.click(); } });
+picker.addEventListener("change", () => { if (picker.files.length) addFiles([...picker.files]); picker.value = ""; });
+["dragenter", "dragover"].forEach(ev => tray.addEventListener(ev, e => { e.preventDefault(); tray.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => tray.addEventListener(ev, e => { e.preventDefault(); tray.classList.remove("over"); }));
+tray.addEventListener("drop", e => { const f = [...(e.dataTransfer.files || [])]; if (f.length) addFiles(f); });
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => { if (!tray.contains(e.target)) { e.preventDefault(); const f = [...(e.dataTransfer.files || [])]; if (f.length) addFiles(f); } });
+document.addEventListener("paste", e => {
+  const f = [...(e.clipboardData ? e.clipboardData.files : [])].filter(x => /^image\//.test(x.type));
+  if (f.length) addFiles(f);
+});
+for (const id of ["keepIcc", "keepOrient"]) $(id).addEventListener("change", async () => { for (const it of items) await runItem(it); render(); });
+$("clearAll").onclick = () => { while (items.length) removeItem(items[0].id); render(); };
+$("zipAll").onclick = () => {
+  const files = items.filter(x => x.result).map(x => ({ name: x.outName, data: x.result.out }));
+  if (files.length) save("cleaned-images.zip", makeZip(files));
+};
+
+/* ---------- samples so the page opens with something to look at ---------- */
+function canvasBytes(draw, type, q) {
+  const cv = document.createElement("canvas"); cv.width = 640; cv.height = 420;
+  draw(cv.getContext("2d"), cv.width, cv.height);
+  return new Promise(res => cv.toBlob(async bl => res(new Uint8Array(await bl.arrayBuffer())), type, q));
+}
+function textChunk(key, text) { return pngChunk("tEXt", concat([enc.encode(key), new Uint8Array([0]), new TextEncoder().encode(text)])); }
+function itxtChunk(key, text) { return pngChunk("iTXt", concat([enc.encode(key), new Uint8Array([0, 0, 0, 0, 0]), enc.encode(text)])); }
+async function makeSamples() {
+  const png = await canvasBytes((g, w, h) => {
+    const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, "#1d2b64"); sky.addColorStop(0.6, "#f8a170"); sky.addColorStop(1, "#2c1a3b");
+    g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#ffd9a0"; g.beginPath(); g.arc(w * 0.68, h * 0.55, 46, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#1b1426"; g.fillRect(140, 150, 26, 200); g.beginPath(); g.moveTo(130, 150); g.lineTo(176, 150); g.lineTo(153, 120); g.fill();
+    g.fillStyle = "#120d1c"; g.fillRect(0, h * 0.82, w, h);
+  }, "image/png");
+  const xmp = '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/" xmlns:xmp="http://ns.adobe.com/xap/1.0/" Iptc4xmpExt:DigitalSourceType="http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia" xmp:CreatorTool="ComfyUI"/></rdf:RDF></x:xmpmeta>';
+  const ihdrEnd = 8 + 12 + u32(png, 8);
+  const pngOut = concat([png.subarray(0, ihdrEnd),
+    textChunk("parameters", "lighthouse on a cliff at dusk, volumetric light, film grain\nNegative prompt: blurry, lowres\nSteps: 30, Sampler: DPM++ 2M Karras, CFG scale: 6.5, Seed: 2214508931, Size: 640x420, Model: sdxl_base_1.0"),
+    textChunk("Software", "ComfyUI"),
+    itxtChunk("XML:com.adobe.xmp", xmp),
+    png.subarray(ihdrEnd)]);
+  const jpg = await canvasBytes((g, w, h) => {
+    const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, "#9cc7e8"); sky.addColorStop(1, "#e9f1f5");
+    g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#5b7d4f"; g.beginPath(); g.moveTo(0, h * 0.7); g.quadraticCurveTo(w * 0.4, h * 0.5, w, h * 0.68); g.lineTo(w, h); g.lineTo(0, h); g.fill();
+    g.fillStyle = "#c0533a"; g.fillRect(w * 0.55, h * 0.52, 90, 60); g.fillStyle = "#7a2f22"; g.beginPath(); g.moveTo(w * 0.55 - 10, h * 0.52); g.lineTo(w * 0.55 + 100, h * 0.52); g.lineTo(w * 0.55 + 45, h * 0.42); g.fill();
+  }, "image/jpeg", 0.9);
+  const tiff = buildTiff([
+    [[0x010F, 2, "Apple"], [0x0110, 2, "iPhone 15 Pro"], [0x0131, 2, "17.4.1"], [0x0132, 2, "2026:06:14 18:42:07"], [0x0112, 3, 1]],
+    [[0x9003, 2, "2026:06:14 18:42:07"], [0x829A, 5, [[1, 640]]], [0x829D, 5, [[178, 100]]], [0x8827, 3, 64], [0xA434, 2, "iPhone 15 Pro back triple camera 6.86mm f/1.78"]],
+    [[0x0001, 2, "N"], [0x0002, 5, [[38, 1], [42, 1], [2964, 100]]], [0x0003, 2, "W"], [0x0004, 5, [[9, 1], [8, 1], [3312, 100]]], [0x0006, 5, [[87, 1]]]]
+  ]);
+  const app1 = new Uint8Array([0xFF, 0xE1, ...be16b(2 + 6 + tiff.length), 0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff]);
+  const at = (jpg[2] === 0xFF && jpg[3] === 0xE0) ? 4 + u16(jpg, 4) : 2;
+  const jpgOut = concat([jpg.subarray(0, at), app1, jpg.subarray(at)]);
+  const f1 = new File([pngOut], "sample-ai-render.png", { type: "image/png" });
+  const f2 = new File([jpgOut], "sample-phone-photo.jpg", { type: "image/jpeg" });
+  await addFiles([f1, f2], true);
+  if (items[0]) { items[0].open = true; render(); }
+}
+render();
+makeSamples();
+})();
+</script>
+</body>
+</html>

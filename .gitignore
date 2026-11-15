@@ -1,0 +1,10 @@
+# Local tool and editor settings: never publish
+.claude/
+.vscode/
+.idea/
+.env
+.env.*
+*.log
+Thumbs.db
+desktop.ini
+.DS_Store
