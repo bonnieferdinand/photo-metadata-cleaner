@@ -114,7 +114,6 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 .chip.location { background: var(--loc-soft); color: var(--loc); border-color: transparent; }
 .chip.device, .chip.person { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
 .chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
-.chip.sample { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .status { font-size: 13px; }
 .status.ok { color: var(--ok); }
 .status.err { color: var(--loc); }
@@ -659,10 +658,9 @@ function cleanName(name, format) {
   return base + "-clean" + (keepExt ? ext : EXT[format]);
 }
 
-async function addFiles(files, sample = false) {
-  if (!sample) for (let i = items.length - 1; i >= 0; i--) if (items[i].sample) removeItem(items[i].id);
+async function addFiles(files) {
   for (const file of files) {
-    const it = { id: nextId++, name: file.name || "pasted-image.png", size: file.size, sample, open: false, file };
+    const it = { id: nextId++, name: file.name || "pasted-image.png", size: file.size, open: false, file };
     it.url = URL.createObjectURL(file);
     items.push(it);
     await runItem(it);
@@ -714,7 +712,6 @@ function card(it) {
   meta.append(document.createTextNode(" · " + fmtBytes(it.size) + (R ? " → " + fmtBytes(R.out.length) : "")));
   info.append(meta);
   const chips = el("div", "chips");
-  if (it.sample) chips.append(el("span", "chip sample", "Sample"));
   if (R) {
     const counts = {};
     for (const f of R.fields) counts[f.cat] = (counts[f.cat] || 0) + 1;
@@ -846,50 +843,7 @@ $("zipAll").onclick = () => {
   if (files.length) save("cleaned-images.zip", makeZip(files));
 };
 
-/* ---------- samples so the page opens with something to look at ---------- */
-function canvasBytes(draw, type, q) {
-  const cv = document.createElement("canvas"); cv.width = 640; cv.height = 420;
-  draw(cv.getContext("2d"), cv.width, cv.height);
-  return new Promise(res => cv.toBlob(async bl => res(new Uint8Array(await bl.arrayBuffer())), type, q));
-}
-function textChunk(key, text) { return pngChunk("tEXt", concat([enc.encode(key), new Uint8Array([0]), new TextEncoder().encode(text)])); }
-function itxtChunk(key, text) { return pngChunk("iTXt", concat([enc.encode(key), new Uint8Array([0, 0, 0, 0, 0]), enc.encode(text)])); }
-async function makeSamples() {
-  const png = await canvasBytes((g, w, h) => {
-    const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, "#1d2b64"); sky.addColorStop(0.6, "#f8a170"); sky.addColorStop(1, "#2c1a3b");
-    g.fillStyle = sky; g.fillRect(0, 0, w, h);
-    g.fillStyle = "#ffd9a0"; g.beginPath(); g.arc(w * 0.68, h * 0.55, 46, 0, Math.PI * 2); g.fill();
-    g.fillStyle = "#1b1426"; g.fillRect(140, 150, 26, 200); g.beginPath(); g.moveTo(130, 150); g.lineTo(176, 150); g.lineTo(153, 120); g.fill();
-    g.fillStyle = "#120d1c"; g.fillRect(0, h * 0.82, w, h);
-  }, "image/png");
-  const xmp = '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/" xmlns:xmp="http://ns.adobe.com/xap/1.0/" Iptc4xmpExt:DigitalSourceType="http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia" xmp:CreatorTool="ComfyUI"/></rdf:RDF></x:xmpmeta>';
-  const ihdrEnd = 8 + 12 + u32(png, 8);
-  const pngOut = concat([png.subarray(0, ihdrEnd),
-    textChunk("parameters", "lighthouse on a cliff at dusk, volumetric light, film grain\nNegative prompt: blurry, lowres\nSteps: 30, Sampler: DPM++ 2M Karras, CFG scale: 6.5, Seed: 2214508931, Size: 640x420, Model: sdxl_base_1.0"),
-    textChunk("Software", "ComfyUI"),
-    itxtChunk("XML:com.adobe.xmp", xmp),
-    png.subarray(ihdrEnd)]);
-  const jpg = await canvasBytes((g, w, h) => {
-    const sky = g.createLinearGradient(0, 0, 0, h); sky.addColorStop(0, "#9cc7e8"); sky.addColorStop(1, "#e9f1f5");
-    g.fillStyle = sky; g.fillRect(0, 0, w, h);
-    g.fillStyle = "#5b7d4f"; g.beginPath(); g.moveTo(0, h * 0.7); g.quadraticCurveTo(w * 0.4, h * 0.5, w, h * 0.68); g.lineTo(w, h); g.lineTo(0, h); g.fill();
-    g.fillStyle = "#c0533a"; g.fillRect(w * 0.55, h * 0.52, 90, 60); g.fillStyle = "#7a2f22"; g.beginPath(); g.moveTo(w * 0.55 - 10, h * 0.52); g.lineTo(w * 0.55 + 100, h * 0.52); g.lineTo(w * 0.55 + 45, h * 0.42); g.fill();
-  }, "image/jpeg", 0.9);
-  const tiff = buildTiff([
-    [[0x010F, 2, "Apple"], [0x0110, 2, "iPhone 15 Pro"], [0x0131, 2, "17.4.1"], [0x0132, 2, "2026:06:14 18:42:07"], [0x0112, 3, 1]],
-    [[0x9003, 2, "2026:06:14 18:42:07"], [0x829A, 5, [[1, 640]]], [0x829D, 5, [[178, 100]]], [0x8827, 3, 64], [0xA434, 2, "iPhone 15 Pro back triple camera 6.86mm f/1.78"]],
-    [[0x0001, 2, "N"], [0x0002, 5, [[38, 1], [42, 1], [2964, 100]]], [0x0003, 2, "W"], [0x0004, 5, [[9, 1], [8, 1], [3312, 100]]], [0x0006, 5, [[87, 1]]]]
-  ]);
-  const app1 = new Uint8Array([0xFF, 0xE1, ...be16b(2 + 6 + tiff.length), 0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff]);
-  const at = (jpg[2] === 0xFF && jpg[3] === 0xE0) ? 4 + u16(jpg, 4) : 2;
-  const jpgOut = concat([jpg.subarray(0, at), app1, jpg.subarray(at)]);
-  const f1 = new File([pngOut], "sample-ai-render.png", { type: "image/png" });
-  const f2 = new File([jpgOut], "sample-phone-photo.jpg", { type: "image/jpeg" });
-  await addFiles([f1, f2], true);
-  if (items[0]) { items[0].open = true; render(); }
-}
 render();
-makeSamples();
 })();
 </script>
 </body>
