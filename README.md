@@ -22,6 +22,8 @@ A free, private web tool that removes hidden metadata from images, right in your
 - Re-checks each cleaned file to confirm nothing is left
 - Batch processing with a single ZIP download
 - Drag and drop, file picker or paste
+- Built for phones first: large touch targets, and on phones "Save" opens the share sheet so you can save straight to Photos
+- No external fonts or scripts, and it works offline after the first visit
 
 ## Limits
 
@@ -29,4 +31,4 @@ Some AI tools also embed an invisible watermark in the pixels themselves (for ex
 
 ## Running it
 
-It is a single static file. Open `index.html` in any modern browser, or host it on any static host such as GitHub Pages.
+It is a static site: `index.html` plus `sw.js` for the offline cache. Open `index.html` in any modern browser, or host the folder on any static host such as GitHub Pages. Design direction is in `DESIGN.md`.

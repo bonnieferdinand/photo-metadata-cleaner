@@ -8,38 +8,25 @@
 <meta property="og:title" content="Photo Metadata Cleaner">
 <meta property="og:description" content="Remove EXIF, GPS, AI-generator tags and C2PA credentials from images, privately in your browser.">
 <meta property="og:type" content="website">
-<meta name="theme-color" content="#2747d6">
+<meta name="theme-color" content="#eef1f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1419" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232747d6'/%3E%3Crect x='7' y='9' width='18' height='14' rx='2' fill='none' stroke='white' stroke-width='2.2'/%3E%3Cpath d='M9 21l5-5 3 3 2-2 4 4' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M22 5l5 5' stroke='%23ffd166' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: one working column like a lightbox table — drop tray on top, a stack of file cards below, each opening into its byte-level inventory. */
+/* Phone first: one column, the main action in thumb reach. Wider screens get room, not new parts. See DESIGN.md. */
 :root {
-  --bg: #eef1f4;
-  --surface: #ffffff;
-  --sunk: #f5f7f9;
-  --ink: #16202b;
-  --muted: #5b6876;
-  --line: #d5dbe2;
-  --accent: #2747d6;
-  --accent-ink: #ffffff;
-  --accent-soft: #e3e8fc;
-  --ai: #b4235a;
-  --ai-soft: #fbe7ef;
-  --loc: #c2410c;
-  --loc-soft: #fdeee4;
-  --warn: #8a5a00;
-  --warn-soft: #fbf1d9;
-  --ok: #157a3c;
-  --ok-soft: #e2f4e8;
-  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --body: "Public Sans", "Segoe UI", system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --bg: #eef1f4; --surface: #ffffff; --sunk: #f5f7f9; --ink: #16202b; --muted: #55616e; --line: #d5dbe2;
+  --accent: #2747d6; --accent-ink: #ffffff; --accent-soft: #e3e8fc;
+  --ai: #b4235a; --ai-soft: #fbe7ef; --loc: #b93c0a; --loc-soft: #fdeee4;
+  --warn: #7a5000; --warn-soft: #fbf1d9; --ok: #146c36; --ok-soft: #e2f4e8;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --tap: 44px;
+  --gutter: max(16px, env(safe-area-inset-left, 0px));
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f1419; --surface: #171e26; --sunk: #121920; --ink: #e6ebf0; --muted: #93a1af; --line: #2a3540;
+    --bg: #0f1419; --surface: #171e26; --sunk: #121920; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2a3540;
     --accent: #8095ff; --accent-ink: #0b1020; --accent-soft: #1e2850;
     --ai: #f47aa5; --ai-soft: #3a1626; --loc: #fb923c; --loc-soft: #3a2010;
     --warn: #f2c94c; --warn-soft: #33290d; --ok: #4ade80; --ok-soft: #10301c;
@@ -47,7 +34,7 @@
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0f1419; --surface: #171e26; --sunk: #121920; --ink: #e6ebf0; --muted: #93a1af; --line: #2a3540;
+  --bg: #0f1419; --surface: #171e26; --sunk: #121920; --ink: #e6ebf0; --muted: #9aa7b4; --line: #2a3540;
   --accent: #8095ff; --accent-ink: #0b1020; --accent-soft: #1e2850;
   --ai: #f47aa5; --ai-soft: #3a1626; --loc: #fb923c; --loc-soft: #3a2010;
   --warn: #f2c94c; --warn-soft: #33290d; --ok: #4ade80; --ok-soft: #10301c;
@@ -55,103 +42,147 @@
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; }
 img { max-width: 100%; }
 [hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 body {
-  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 32px 64px;
+  margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--sans);
+  padding: 20px var(--gutter) 24px; -webkit-tap-highlight-color: transparent;
 }
-.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 24px; }
-header { display: grid; gap: 8px; }
-h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5vw, 44px); line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
-.lede { margin: 0; color: var(--muted); max-width: 62ch; }
-.privacy { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ok); font-weight: 600; }
-.privacy::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.wrap { max-width: 920px; margin: 0 auto; display: grid; gap: 16px; }
+
+header { display: grid; gap: 6px; }
+h1 { font-weight: 800; font-size: clamp(26px, 7.2vw, 44px); line-height: 1.08; margin: 0; letter-spacing: -0.025em; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); font-size: 15px; max-width: 60ch; }
+.privacy { margin: 0; font-size: 14px; color: var(--ok); font-weight: 600; }
+
+button {
+  font: 600 15px/1.2 var(--sans); min-height: var(--tap); padding: 0 16px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  touch-action: manipulation;
+}
+button:focus-visible, .opt input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:active { transform: translateY(1px); filter: brightness(.94); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: not-allowed; transform: none; filter: none; }
+button.quiet { background: transparent; border-color: transparent; color: var(--accent); padding: 0 10px; }
+@media (hover: hover) {
+  button:hover { border-color: var(--muted); }
+  button.primary:hover { filter: brightness(1.08); }
+  button.quiet:hover { border-color: transparent; text-decoration: underline; }
+}
 
 .tray {
   border: 2px dashed var(--line); border-radius: 14px; background: var(--surface);
-  padding: 28px 20px; display: grid; gap: 14px; justify-items: center; text-align: center;
-  transition: border-color .15s, background .15s; cursor: pointer;
+  padding: 16px; display: grid; gap: 8px; justify-items: stretch; text-align: center;
+  transition: border-color .15s, background .15s;
 }
-.tray:hover, .tray:focus-visible { border-color: var(--accent); outline: none; }
 .tray.over { border-color: var(--accent); background: var(--accent-soft); }
-.tray strong { font-family: var(--display); font-size: 20px; font-weight: 600; }
+.pick { min-height: 56px; font-size: 17px; }
 .tray p { margin: 0; color: var(--muted); font-size: 14px; }
-.formats { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; }
-
-.controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; }
-.opts { display: flex; flex-wrap: wrap; gap: 8px 20px; }
-.opt { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
-.opt input { width: 16px; height: 16px; accent-color: var(--accent); }
-.opt span small { color: var(--muted); font-size: 12px; }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
-button, .btn {
-  font: 600 14px/1 var(--body); border-radius: 8px; padding: 10px 14px; cursor: pointer;
-  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+.hint-desk { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .tray { padding: 28px 20px; justify-items: center; cursor: pointer; }
+  .tray:hover { border-color: var(--accent); }
+  .pick { padding: 0 28px; }
+  .hint-desk { display: block; }
 }
-button:hover { border-color: var(--muted); }
-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-button.primary:hover { filter: brightness(1.08); }
-button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 
-.summary { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; color: var(--muted); }
+.opts { border: 0; margin: 0; padding: 0; display: grid; }
+.opt { display: flex; gap: 12px; align-items: center; min-height: var(--tap); cursor: pointer; font-size: 15px; }
+.opt input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--accent); }
+.opt small { display: block; color: var(--muted); font-size: 13px; line-height: 1.3; }
+
+.summary { margin: 0; display: flex; flex-wrap: wrap; gap: 2px 18px; font-size: 14px; color: var(--muted); }
 .summary b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
-.list { display: grid; gap: 12px; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-.row { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px; }
-.thumb { width: 76px; height: 76px; border-radius: 8px; object-fit: cover; background: var(--sunk); border: 1px solid var(--line); }
-.info { min-width: 0; display: grid; gap: 6px; }
-.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list { display: grid; gap: 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px 12px; align-items: start; padding: 12px; }
+.thumb { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; background: var(--sunk); border: 1px solid var(--line); display: block; }
+.info { min-width: 0; display: grid; gap: 4px; }
+.name { font-weight: 600; overflow-wrap: anywhere; line-height: 1.3; }
 .meta { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--sunk); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
-.chip.ai { background: var(--ai-soft); color: var(--ai); border-color: transparent; }
-.chip.location { background: var(--loc-soft); color: var(--loc); border-color: transparent; }
-.chip.device, .chip.person { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
-.chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--sunk); color: var(--muted); white-space: nowrap; }
+.chip.ai { background: var(--ai-soft); color: var(--ai); }
+.chip.location { background: var(--loc-soft); color: var(--loc); }
+.chip.device, .chip.person { background: var(--warn-soft); color: var(--warn); }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
 .status { font-size: 13px; }
 .status.ok { color: var(--ok); }
 .status.err { color: var(--loc); }
-.side { display: grid; gap: 6px; justify-items: end; }
-.linkish { background: none; border: none; padding: 4px 0; color: var(--accent); font-weight: 600; font-size: 13px; }
-.linkish:hover { text-decoration: underline; }
+.status.wait { color: var(--muted); }
+.side { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.side .primary { flex: 1 1 auto; }
 
-.detail { border-top: 1px solid var(--line); background: var(--sunk); padding: 16px 14px 18px; display: grid; gap: 18px; }
-.detail h3 { margin: 0 0 8px; font: 600 12px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.tablewrap { overflow-x: auto; }
+.detail { border-top: 1px solid var(--line); background: var(--sunk); padding: 14px 12px 16px; display: grid; gap: 18px; border-radius: 0 0 12px 12px; }
+.detail h3 { margin: 0 0 6px; font-size: 15px; font-weight: 700; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-weight: 600; color: var(--muted); font-size: 12px; }
-td.k { white-space: nowrap; font-weight: 500; }
+td.k { font-weight: 600; }
 td.num { font-family: var(--mono); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-td.v { min-width: 220px; }
-.val { margin: 0; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 8.5em; overflow: auto; }
+.val { margin: 0; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 8.5em; overflow: auto; }
 .tag { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-.act-removed { color: var(--ai); font-weight: 600; }
-.act-kept { color: var(--ok); font-weight: 600; }
+.res { font-weight: 600; white-space: nowrap; }
+.res.removed { color: var(--ai); }
+.res.kept { color: var(--ok); }
+/* Phone: tables become stacked entries instead of sideways-scrolling grids. */
+@media (max-width: 599px) {
+  tr.hd { display: none; }
+  table, tbody { display: block; }
+  tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  td { display: block; padding: 0; border: 0; min-width: 0; }
+  .ft td.cat { grid-column: 2; grid-row: 1; }
+  .ft td.k { grid-column: 1; grid-row: 1; }
+  .ft td.v, .ft td.tag { grid-column: 1 / -1; }
+  .bt td.k { grid-column: 1; grid-row: 1; }
+  .bt td.res { grid-column: 2; grid-row: 1; text-align: right; }
+  .bt td.num { grid-column: 2; grid-row: 2; text-align: right; }
+}
 
-.notes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-.note { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
-.note h2 { font-family: var(--display); font-size: 17px; font-weight: 600; margin: 0 0 6px; }
-.note p { margin: 0; color: var(--muted); font-size: 14px; }
+.bar {
+  position: sticky; bottom: 0; z-index: 2; margin: 0 calc(-1 * var(--gutter));
+  padding: 10px var(--gutter) calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg); border-top: 1px solid var(--line);
+  display: flex; gap: 8px; align-items: center; justify-content: flex-end;
+}
+.bar .primary { flex: 1 1 auto; }
+
+.notes { display: grid; gap: 8px; }
+.note { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.note summary { min-height: var(--tap); padding: 10px 16px; font-weight: 700; cursor: pointer; display: flex; align-items: center; }
+.note p { margin: 0; padding: 0 16px 16px; color: var(--muted); font-size: 15px; max-width: 70ch; }
 
 .toast {
-  position: fixed; left: 50%; transform: translateX(-50%);
-  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 3;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500;
   max-width: calc(100vw - 32px);
 }
-@media (max-width: 560px) {
-  .row { grid-template-columns: 56px minmax(0, 1fr); }
-  .thumb { width: 56px; height: 56px; }
-  .side { grid-column: 1 / -1; justify-items: stretch; grid-template-columns: 1fr auto; align-items: center; }
+
+/* Tablet and up: file cards go side by side with their actions; the bar becomes a floating toolbar. */
+@media (min-width: 600px) {
+  body { padding-top: 32px; }
+  .row { grid-template-columns: 76px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 14px; }
+  .thumb { width: 76px; height: 76px; }
+  .side { grid-column: auto; display: grid; justify-items: end; gap: 2px; }
+  .side .primary { width: 100%; }
+  .detail { padding: 16px 14px 18px; }
+  td.v { min-width: 220px; }
+  td.k { white-space: nowrap; }
+  .bar { margin: 0; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--surface); bottom: 12px; }
+  .bar .primary { flex: 0 0 auto; }
+  .opts { grid-template-columns: repeat(2, max-content); gap: 0 28px; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* Desktop: more air around the same column. */
+@media (min-width: 900px) {
+  body { padding-top: 56px; padding-bottom: 64px; }
+  .wrap { gap: 22px; }
+  .lede { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } button:active { transform: none; } }
 </style>
 </head>
 <body>
@@ -159,47 +190,48 @@ td.v { min-width: 220px; }
 <div class="wrap">
   <header>
     <h1>Photo Metadata Cleaner</h1>
-    <p class="lede">Strip EXIF, GPS, XMP, IPTC, AI prompts and C2PA Content Credentials from JPG, PNG and WebP images. The image pixels are copied byte for byte, so quality never changes.</p>
-    <span class="privacy">Runs in your browser. Images are never uploaded.</span>
+    <p class="lede">Remove location, camera details, AI prompts and Content Credentials from JPG, PNG and WebP photos. The picture itself is copied byte for byte, so quality doesn't change.</p>
+    <p class="privacy">Runs on your device. Photos are never uploaded.</p>
   </header>
 
-  <div class="tray" id="tray" tabindex="0" role="button" aria-label="Add images">
-    <strong>Drop images here</strong>
-    <p>or click to choose files. You can also paste an image.</p>
-    <span class="formats">JPG · JPEG · PNG · WEBP</span>
+  <div class="tray" id="tray">
+    <button class="primary pick" id="pick" type="button">Choose photos</button>
+    <p class="hint-desk">or drop images here, or paste one</p>
+    <p>JPG, PNG or WebP</p>
     <input type="file" id="picker" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple hidden>
   </div>
 
-  <div class="controls">
-    <div class="opts">
-      <label class="opt"><input type="checkbox" id="keepIcc" checked><span>Keep color profile <small>(ICC, keeps colors accurate)</small></span></label>
-      <label class="opt"><input type="checkbox" id="keepOrient" checked><span>Keep rotation <small>(orientation only)</small></span></label>
-    </div>
-    <div class="actions">
-      <button id="clearAll">Remove all</button>
-      <button class="primary" id="zipAll">Download all (.zip)</button>
-    </div>
-  </div>
+  <fieldset class="opts">
+    <legend class="sr-only">Options</legend>
+    <label class="opt"><input type="checkbox" id="keepIcc" checked><span>Keep color profile <small>Keeps colors accurate</small></span></label>
+    <label class="opt"><input type="checkbox" id="keepOrient" checked><span>Keep rotation <small>Photos stay upright</small></span></label>
+  </fieldset>
 
-  <div class="summary" id="summary"></div>
+  <p class="summary" id="summary" hidden></p>
   <div class="list" id="list"></div>
 
-  <section class="notes">
-    <div class="note">
-      <h2>What gets removed</h2>
-      <p>Camera make, model and serial number, GPS location, dates, author and copyright fields, editing history, Stable Diffusion and ComfyUI prompts, Midjourney and DALL·E tags, IPTC "digital source type" AI labels, and signed C2PA manifests.</p>
-    </div>
-    <div class="note">
-      <h2>What stays</h2>
-      <p>The compressed image data, transparency, animation frames, and optionally the color profile and rotation flag. Nothing is re-encoded, so the cleaned file is the same picture with fewer bytes.</p>
-    </div>
-    <div class="note">
-      <h2>What metadata cleaning can't do</h2>
-      <p>Some generators also hide a watermark inside the pixels themselves (for example Google SynthID). That is part of the image, not its metadata, so no lossless cleaner removes it.</p>
-    </div>
+  <div class="bar" id="bar" hidden>
+    <button class="quiet" id="clearAll" type="button">Remove all</button>
+    <button id="zipOnly" type="button" hidden>ZIP</button>
+    <button class="primary" id="zipAll" type="button">Save all</button>
+  </div>
+
+  <section class="notes" aria-label="About this tool">
+    <details class="note">
+      <summary>What gets removed</summary>
+      <p>Camera make, model and serial number, GPS location, dates, author and copyright fields, editing history, Stable Diffusion and ComfyUI prompts, Midjourney and DALL·E tags, the IPTC "digital source type" AI label, and signed C2PA manifests.</p>
+    </details>
+    <details class="note">
+      <summary>What stays</summary>
+      <p>The compressed image data, transparency, animation frames, and if you want them, the color profile and rotation flag. Nothing is re-encoded, so the cleaned file is the same picture with fewer bytes.</p>
+    </details>
+    <details class="note">
+      <summary>What it can't remove</summary>
+      <p>Some generators also hide a watermark inside the pixels themselves, for example Google SynthID. That is part of the picture, not its metadata, so no lossless cleaner removes it.</p>
+    </details>
   </section>
 </div>
-<div class="toast" id="toast" hidden></div>
+<div class="toast" id="toast" role="status" hidden></div>
 
 <script>
 (() => {
@@ -649,6 +681,15 @@ const opts = () => ({ keepIcc: $("keepIcc").checked, keepOrient: $("keepOrient")
 const CAT_LABEL = { ai: "AI tags", location: "Location", device: "Camera", person: "Personal", time: "Dates", software: "Software", other: "Other" };
 const CAT_ORDER = ["ai", "location", "device", "person", "time", "software", "other"];
 const EXT = { jpeg: ".jpg", png: ".png", webp: ".webp" };
+const MIME = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+
+/* On phones, saving goes through the share sheet ("Save Image" puts it in Photos). Desktop downloads. */
+const shareMode = (() => {
+  try {
+    return matchMedia("(pointer: coarse)").matches && !!navigator.canShare &&
+      navigator.canShare({ files: [new File([new Uint8Array(1)], "x.jpg", { type: "image/jpeg" })] });
+  } catch { return false; }
+})();
 
 function cleanName(name, format) {
   const dot = name.lastIndexOf(".");
@@ -659,13 +700,15 @@ function cleanName(name, format) {
 }
 
 async function addFiles(files) {
-  for (const file of files) {
-    const it = { id: nextId++, name: file.name || "pasted-image.png", size: file.size, open: false, file };
-    it.url = URL.createObjectURL(file);
-    items.push(it);
-    await runItem(it);
-  }
+  const added = files.map(file => ({ id: nextId++, name: file.name || "pasted-image.png", size: file.size, open: false, file, pending: true }));
+  items.push(...added);
   render();
+  for (const it of added) {
+    if (!items.includes(it)) continue;
+    await Promise.all([runItem(it), makeThumb(it)]);
+    it.pending = false;
+    update(it);
+  }
 }
 async function runItem(it) {
   try {
@@ -675,19 +718,34 @@ async function runItem(it) {
     it.outName = cleanName(it.name, it.result.format);
   } catch (e) { it.result = null; it.error = e.message || String(e); }
 }
+/* A small preview instead of decoding a full 12 MP photo for a 76 px box. */
+async function makeThumb(it) {
+  try {
+    const bmp = await createImageBitmap(it.file);
+    it.dims = bmp.width + "×" + bmp.height;
+    const S = 152, c = document.createElement("canvas");
+    c.width = c.height = S;
+    const k = Math.max(S / bmp.width, S / bmp.height), w = bmp.width * k, h = bmp.height * k;
+    c.getContext("2d").drawImage(bmp, (S - w) / 2, (S - h) / 2, w, h);
+    bmp.close();
+    const blob = await new Promise(r => c.toBlob(r, "image/webp", 0.8));
+    if (blob) it.thumb = URL.createObjectURL(blob);
+  } catch { it.thumb = null; }
+}
 function removeItem(id) {
   const i = items.findIndex(x => x.id === id);
-  if (i >= 0) { URL.revokeObjectURL(items[i].url); items.splice(i, 1); }
+  if (i >= 0) { if (items[i].thumb) URL.revokeObjectURL(items[i].thumb); items.splice(i, 1); }
 }
 
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
-function render() {
-  const list = $("list"); list.replaceChildren();
+function renderChrome() {
   const ok = items.filter(x => x.result);
+  $("bar").hidden = items.length === 0;
   $("zipAll").disabled = ok.length === 0;
-  $("clearAll").disabled = items.length === 0;
-  const sum = $("summary"); sum.replaceChildren();
+  $("zipAll").textContent = shareMode ? `Save all (${ok.length})` : ok.length > 1 ? `Download all as ZIP (${ok.length})` : "Download";
+  $("zipOnly").hidden = !shareMode || ok.length < 2;
+  const sum = $("summary"); sum.replaceChildren(); sum.hidden = items.length === 0;
   if (items.length) {
     const fields = ok.reduce((s, x) => s + x.result.fields.length, 0);
     const bytes = ok.reduce((s, x) => s + x.result.removedBytes, 0);
@@ -695,22 +753,29 @@ function render() {
     const parts = [["Images", items.length], ["Fields found", fields], ["With AI tags", ai], ["Removed", fmtBytes(Math.max(0, bytes))]];
     for (const [k, v] of parts) { const s = el("span", null, k + " "); s.append(el("b", null, String(v))); sum.append(s); }
   }
-  for (const it of items) list.append(card(it));
+}
+function render() {
+  renderChrome();
+  $("list").replaceChildren(...items.map(card));
+}
+function update(it) {
+  const old = $("list").querySelector(`[data-id="${it.id}"]`);
+  if (old) old.replaceWith(card(it));
+  renderChrome();
 }
 
 function card(it) {
   const c = el("article", "card");
+  c.dataset.id = it.id;
   const row = el("div", "row");
-  const img = el("img", "thumb"); img.src = it.url; img.alt = ""; img.loading = "lazy";
-  img.onload = () => { it.dims = img.naturalWidth + "×" + img.naturalHeight; const m = c.querySelector(".dims"); if (m) m.textContent = it.dims; };
+  let img;
+  if (it.thumb) { img = el("img", "thumb"); img.src = it.thumb; img.alt = ""; img.width = img.height = 76; }
+  else img = el("span", "thumb");
   const info = el("div", "info");
   info.append(el("div", "name", it.name));
   const R = it.result;
-  const meta = el("div", "meta");
-  meta.append(document.createTextNode((R ? R.format.toUpperCase() : "?") + " · "));
-  meta.append(el("span", "dims", it.dims || "…"));
-  meta.append(document.createTextNode(" · " + fmtBytes(it.size) + (R ? " → " + fmtBytes(R.out.length) : "")));
-  info.append(meta);
+  info.append(el("div", "meta", [R ? R.format.toUpperCase() : null, it.dims, fmtBytes(it.size) + (R ? " → " + fmtBytes(R.out.length) : "")].filter(Boolean).join(" · ")));
+  if (it.pending) { info.append(el("div", "status wait", "Checking…")); row.append(img, info); c.append(row); return c; }
   const chips = el("div", "chips");
   if (R) {
     const counts = {};
@@ -718,25 +783,26 @@ function card(it) {
     for (const k of CAT_ORDER) if (counts[k]) chips.append(el("span", "chip " + k, CAT_LABEL[k] + " " + counts[k]));
     if (!R.fields.length && !R.removed.length) chips.append(el("span", "chip ok", "No metadata found"));
   }
-  info.append(chips);
+  if (chips.childElementCount) info.append(chips);
   if (it.error) info.append(el("div", "status err", it.error));
   else if (R) {
     const msg = R.removed.length
-      ? `Removed ${R.removed.length} block${R.removed.length > 1 ? "s" : ""} (${fmtBytes(R.removedBytes)})` + (R.verified ? " · checked: nothing left" : " · some data could not be removed")
-      : "Already clean · nothing to remove";
+      ? `Removed ${R.removed.length} block${R.removed.length > 1 ? "s" : ""} (${fmtBytes(R.removedBytes)})` + (R.verified ? ", checked: nothing left" : ", some data could not be removed")
+      : "Already clean, nothing to remove";
     info.append(el("div", "status " + (R.verified ? "ok" : "err"), msg));
   }
   const side = el("div", "side");
   if (R) {
     const dl = el("button", "primary", "Save clean copy");
-    dl.onclick = () => save(it.outName, R.out);
+    dl.onclick = () => saveItems([it]);
     side.append(dl);
-    const tg = el("button", "linkish", it.open ? "Hide details" : "Show what's inside");
+    const tg = el("button", "quiet", it.open ? "Hide details" : "Show what's inside");
     tg.setAttribute("aria-expanded", String(it.open));
-    tg.onclick = () => { it.open = !it.open; render(); };
+    tg.onclick = () => { it.open = !it.open; update(it); };
     side.append(tg);
   }
-  const rm = el("button", "linkish", "Remove");
+  const rm = el("button", "quiet", "Remove");
+  rm.setAttribute("aria-label", "Remove " + it.name);
   rm.onclick = () => { removeItem(it.id); render(); };
   side.append(rm);
   row.append(img, info, side);
@@ -745,37 +811,35 @@ function card(it) {
   return c;
 }
 
+function headRow(names) { const tr = el("tr", "hd"); for (const h of names) tr.append(el("th", null, h)); return tr; }
 function detail(R) {
   const d = el("div", "detail");
   const s1 = el("section");
   s1.append(el("h3", null, R.fields.length ? `Found in the original (${R.fields.length})` : "Found in the original"));
   if (R.fields.length) {
-    const w = el("div", "tablewrap"); const t = el("table");
-    const hr = el("tr"); for (const h of ["Type", "Field", "Value", "Source"]) hr.append(el("th", null, h));
-    t.append(hr);
+    const t = el("table", "ft");
+    t.append(headRow(["Type", "Field", "Value", "Source"]));
     const sorted = R.fields.slice().sort((a, b) => CAT_ORDER.indexOf(a.cat) - CAT_ORDER.indexOf(b.cat));
     for (const f of sorted) {
       const tr = el("tr");
-      const tc = el("td"); tc.append(el("span", "chip " + f.cat, CAT_LABEL[f.cat])); tr.append(tc);
-      tr.append(el("td", "k", f.label));
-      const vc = el("td", "v"); vc.append(el("pre", "val", f.value)); tr.append(vc);
-      tr.append(el("td", "tag", f.src));
+      const tc = el("td", "cat"); tc.append(el("span", "chip " + f.cat, CAT_LABEL[f.cat]));
+      const vc = el("td", "v"); vc.append(el("pre", "val", f.value));
+      tr.append(tc, el("td", "k", f.label), vc, el("td", "tag", f.src));
       t.append(tr);
     }
-    w.append(t); s1.append(w);
+    s1.append(t);
   } else s1.append(el("p", "tag", "No readable metadata fields."));
   const s2 = el("section");
   s2.append(el("h3", null, "File blocks"));
-  const w2 = el("div", "tablewrap"); const t2 = el("table");
-  const hr2 = el("tr"); for (const h of ["Block", "Marker", "Size", "Result"]) hr2.append(el("th", null, h));
-  t2.append(hr2);
+  const t2 = el("table", "bt");
+  t2.append(headRow(["Block", "Marker", "Size", "Result"]));
   for (const bl of R.blocks) {
     const tr = el("tr");
     const nc = el("td", "k", bl.name); if (bl.note) { nc.append(el("br")); nc.append(el("span", "tag", bl.note)); }
-    tr.append(nc, el("td", "tag", bl.tag), el("td", "num", fmtBytes(bl.size)), el("td", bl.kept ? "act-kept" : "act-removed", bl.kept ? "Kept" : "Removed"));
+    tr.append(nc, el("td", "tag", bl.tag), el("td", "num", fmtBytes(bl.size)), el("td", "res " + (bl.kept ? "kept" : "removed"), bl.kept ? "Kept" : "Removed"));
     t2.append(tr);
   }
-  w2.append(t2); s2.append(w2);
+  s2.append(t2);
   d.append(s1, s2);
   return d;
 }
@@ -783,12 +847,24 @@ function detail(R) {
 /* ---------- saving ---------- */
 let toastTimer;
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200); }
-function save(filename, data) {
+function download(filename, data) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([data]));
   a.download = filename; document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   toast("Saved " + filename);
+}
+const zipOf = list => makeZip(list.map(x => ({ name: x.outName, data: x.result.out })));
+async function saveItems(list) {
+  if (!list.length) return;
+  if (shareMode) {
+    const files = list.map(x => new File([x.result.out], x.outName, { type: MIME[x.result.format] }));
+    try {
+      if (navigator.canShare({ files })) { await navigator.share({ files }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  if (list.length === 1) download(list[0].outName, list[0].result.out);
+  else download("cleaned-images.zip", zipOf(list));
 }
 
 /* ---------- zip (stored, no compression: images are already compressed) ---------- */
@@ -825,7 +901,6 @@ function makeZip(files) {
 /* ---------- inputs ---------- */
 const tray = $("tray"), picker = $("picker");
 tray.addEventListener("click", () => picker.click());
-tray.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); picker.click(); } });
 picker.addEventListener("change", () => { if (picker.files.length) addFiles([...picker.files]); picker.value = ""; });
 ["dragenter", "dragover"].forEach(ev => tray.addEventListener(ev, e => { e.preventDefault(); tray.classList.add("over"); }));
 ["dragleave", "drop"].forEach(ev => tray.addEventListener(ev, e => { e.preventDefault(); tray.classList.remove("over"); }));
@@ -836,14 +911,17 @@ document.addEventListener("paste", e => {
   const f = [...(e.clipboardData ? e.clipboardData.files : [])].filter(x => /^image\//.test(x.type));
   if (f.length) addFiles(f);
 });
-for (const id of ["keepIcc", "keepOrient"]) $(id).addEventListener("change", async () => { for (const it of items) await runItem(it); render(); });
+for (const id of ["keepIcc", "keepOrient"]) $(id).addEventListener("change", async () => {
+  for (const it of items.slice()) { await runItem(it); update(it); }
+});
 $("clearAll").onclick = () => { while (items.length) removeItem(items[0].id); render(); };
-$("zipAll").onclick = () => {
-  const files = items.filter(x => x.result).map(x => ({ name: x.outName, data: x.result.out }));
-  if (files.length) save("cleaned-images.zip", makeZip(files));
-};
+$("zipAll").onclick = () => saveItems(items.filter(x => x.result));
+$("zipOnly").onclick = () => { const ok = items.filter(x => x.result); if (ok.length) download("cleaned-images.zip", zipOf(ok)); };
 
 render();
+
+/* Offline cache: the page keeps working without a connection after the first visit. */
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 })();
 </script>
 </body>
